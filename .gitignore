@@ -1,0 +1,23 @@
+# 环境 & 密钥
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 编辑器 / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 大型文件（审核表等）
+*.docx
+
+# 运行时文件
+*.pid

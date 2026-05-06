@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小红书爆款标题助手</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  background:#0f1117;color:#e0e0e0;min-height:100vh;
+}
+.header{text-align:center;padding:36px 20px 16px;}
+.header h1{font-size:26px;font-weight:700;background:linear-gradient(135deg,#ff6b6b,#ffa726,#ffd54f);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.header p{color:#666;margin-top:6px;font-size:13px;}
+.container{max-width:720px;margin:0 auto;padding:0 20px 60px;}
+
+/* 产品选择 */
+.product-row,.type-row{display:flex;align-items:center;gap:8px;margin-bottom:16px;}
+.product-row span,.type-row span{font-size:14px;color:#888;white-space:nowrap;}
+.product-btn,.type-btn{
+  flex:1;padding:10px 0;text-align:center;cursor:pointer;
+  border-radius:8px;border:1px solid #2a2d38;background:#1a1d28;color:#888;font-size:14px;font-weight:600;
+  transition:all .2s;outline:none;
+}
+.product-btn.active,.type-btn.active{background:#2a2d38;border-color:#ffa726;color:#ffa726;}
+.product-btn:hover,.type-btn:hover{border-color:#555;}
+
+/* 模式 Tab */
+.tabs{display:flex;margin-bottom:20px;border-radius:12px;overflow:hidden;border:1px solid #2a2d38;}
+.tab{flex:1;padding:14px 0;text-align:center;cursor:pointer;background:#1a1d28;color:#666;font-size:15px;font-weight:600;transition:all .2s;border:none;outline:none;}
+.tab.active{background:#2a2d38;color:#ffa726;}
+
+/* 输入区 */
+.input-area{margin-bottom:16px;}
+.input-area textarea{width:100%;padding:16px;border-radius:12px;border:1px solid #2a2d38;background:#1a1d28;color:#e0e0e0;font-size:15px;line-height:1.7;resize:vertical;min-height:200px;outline:none;transition:border .2s;font-family:inherit;}
+.input-area textarea:focus{border-color:#ffa726;}
+.input-area textarea.small{min-height:80px;}
+.char-count{text-align:right;font-size:12px;color:#555;margin-top:4px;}
+.mode-hint{font-size:12px;color:#555;margin-bottom:10px;line-height:1.6;}
+.mode-hint span{color:#ffa726;}
+
+/* 数量 */
+.count-row{display:flex;align-items:center;gap:8px;margin-bottom:16px;}
+.count-row span{font-size:14px;color:#888;white-space:nowrap;}
+.count-btn{padding:8px 18px;border-radius:8px;border:1px solid #2a2d38;background:#1a1d28;color:#888;font-size:14px;cursor:pointer;transition:all .2s;}
+.count-btn.active{background:#2a2d38;border-color:#ffa726;color:#ffa726;}
+.count-btn:hover{border-color:#555;}
+
+/* API */
+.api-toggle{font-size:13px;color:#555;cursor:pointer;margin-bottom:8px;display:inline-flex;align-items:center;gap:4px;}
+.api-config{display:none;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;padding:14px;border-radius:10px;background:#1a1d28;border:1px solid #2a2d38;}
+.api-config.show{display:grid;}
+.api-config .full{grid-column:1/-1;}
+.api-config input{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #2a2d38;background:#0f1117;color:#e0e0e0;font-size:13px;outline:none;}
+.api-config input:focus{border-color:#ffa726;}
+.api-config label{font-size:12px;color:#888;display:block;margin-bottom:4px;}
+
+/* 按钮 */
+.btn{width:100%;padding:14px;border-radius:12px;border:none;background:linear-gradient(135deg,#ff6b6b,#ffa726);color:#fff;font-size:16px;font-weight:700;cursor:pointer;transition:transform .2s,opacity .2s;}
+.btn:hover{transform:translateY(-1px)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+/* 加载 */
+.loading{display:none;text-align:center;padding:30px 0;}
+.loading.show{display:block}
+.spinner{width:36px;height:36px;border:3px solid #2a2d38;border-top-color:#ffa726;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading p{color:#666;font-size:14px;}
+
+/* 结果 */
+.results{display:none;margin-top:20px;}
+.results.show{display:block}
+.result-item{display:flex;align-items:center;gap:12px;padding:14px 16px;margin-bottom:8px;border-radius:10px;background:#1a1d28;border:1px solid #2a2d38;transition:border .2s;}
+.result-item:hover{border-color:#444}
+.result-num{color:#ffa726;font-size:14px;font-weight:700;min-width:24px;}
+.result-title{flex:1;font-size:15px;color:#e0e0e0;line-height:1.5;}
+.result-badge{font-size:11px;padding:3px 10px;border-radius:20px;white-space:nowrap;}
+.badge-ok{background:#1a2e1a;color:#4caf50;}
+.badge-warn{background:#2e1a1a;color:#ff6b6b;}
+.result-copy{padding:6px 14px;border-radius:6px;border:1px solid #2a2d38;background:transparent;color:#888;font-size:12px;cursor:pointer;transition:all .2s;white-space:nowrap;}
+.result-copy:hover{border-color:#ffa726;color:#ffa726}
+.result-copy.copied{border-color:#4caf50;color:#4caf50}
+
+@media(max-width:500px){.header h1{font-size:22px}.api-config{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>小红书爆款标题助手</h1>
+  <p>文案取标题 / 视频配标题 / 短标题 / 长标题 / 合规检查</p>
+</div>
+
+<div class="container">
+
+  <!-- 产品选择 -->
+  <div class="product-row">
+    <span>产品：</span>
+    <button class="product-btn active" data-product="bzu">超能B族</button>
+    <button class="product-btn" data-product="ctj">巢天娇</button>
+  </div>
+
+  <!-- 格式选择 -->
+  <div class="type-row">
+    <span>格式：</span>
+    <button class="type-btn" data-type="short">短标题（12字符内）</button>
+    <button class="type-btn active" data-type="long">长标题（10-20字）</button>
+  </div>
+
+  <!-- Tab -->
+  <div class="tabs">
+    <button class="tab active" data-mode="copy">文案取标题</button>
+    <button class="tab" data-mode="video">视频配标题</button>
+  </div>
+
+  <div class="mode-hint" id="modeHint">
+    <span>模式1：</span>粘贴完整小红书文案，AI 先分析语境（人称/语气/卖点），再生成匹配的标题
+  </div>
+
+  <!-- 输入 -->
+  <div class="input-area">
+    <textarea id="contentInput" placeholder="在此粘贴小红书文案全文..."></textarea>
+    <div class="char-count" id="charCount">0 字</div>
+  </div>
+
+  <!-- 数量 -->
+  <div class="count-row">
+    <span>生成数量：</span>
+    <button class="count-btn" data-count="3">3个</button>
+    <button class="count-btn active" data-count="5">5个</button>
+    <button class="count-btn" data-count="8">8个</button>
+    <button class="count-btn" data-count="10">10个</button>
+  </div>
+
+  <!-- API 配置 -->
+  <div class="api-toggle" id="apiToggle">⚙️ API 配置（可选） ▸</div>
+  <div class="api-config" id="apiConfig">
+    <div class="full">
+      <label>API Key</label>
+      <input type="password" id="apiKey" placeholder="sk-xxx">
+    </div>
+    <div>
+      <label>Base URL</label>
+      <input type="text" id="baseUrl" placeholder="https://api.deepseek.com">
+    </div>
+    <div>
+      <label>模型</label>
+      <input type="text" id="model" placeholder="deepseek-chat">
+    </div>
+  </div>
+
+  <button class="btn" id="generateBtn">生成标题</button>
+
+  <div class="loading" id="loading"><div class="spinner"></div><p>AI 正在分析语境并创作标题...</p></div>
+
+  <div class="results" id="results"></div>
+
+</div>
+
+<script>
+// ====== 状态 ======
+let currentMode = "copy";
+let currentProduct = "bzu";
+let currentType = "long";
+
+// ====== localStorage API 配置 ======
+const LS_KEYS = { apiKey: 'ttl_api_key', baseUrl: 'ttl_base_url', model: 'ttl_model' };
+
+function saveApiConfig() {
+  Object.entries(LS_KEYS).forEach(([field, key]) => {
+    const val = document.getElementById(field).value.trim();
+    if (val) localStorage.setItem(key, val);
+  });
+}
+function loadApiConfig() {
+  Object.entries(LS_KEYS).forEach(([field, key]) => {
+    const saved = localStorage.getItem(key);
+    if (saved) document.getElementById(field).value = saved;
+  });
+}
+// 页面加载时恢复
+loadApiConfig();
+// 输入框失焦时自动保存
+['apiKey', 'baseUrl', 'model'].forEach(id => {
+  document.getElementById(id).addEventListener('blur', saveApiConfig);
+  document.getElementById(id).addEventListener('input', saveApiConfig);
+});
+
+// ====== 产品选择 ======
+document.querySelectorAll(".product-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".product-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentProduct = btn.dataset.product;
+    document.getElementById("results").classList.remove("show");
+  });
+});
+
+// ====== 格式选择 ======
+document.querySelectorAll(".type-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".type-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentType = btn.dataset.type;
+  });
+});
+
+// ====== Tab ======
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    currentMode = tab.dataset.mode;
+    const ta = document.getElementById("contentInput");
+    const hint = document.getElementById("modeHint");
+    if (currentMode === "copy") {
+      ta.placeholder = "在此粘贴小红书文案全文...";
+      ta.classList.remove("small"); ta.style.minHeight = "200px";
+      hint.innerHTML = '<span>模式1：</span>粘贴完整小红书文案，AI 先分析语境（人称/语气/卖点），再生成匹配的标题';
+    } else {
+      ta.placeholder = "例：30岁宝妈产后身材管理，分享吃B族两个月的变化";
+      ta.classList.add("small"); ta.style.minHeight = "80px";
+      hint.innerHTML = '<span>模式2：</span>描述视频的传播方向和核心内容，AI 生成匹配的爆款标题';
+    }
+    ta.value = ""; updateCharCount();
+    document.getElementById("results").classList.remove("show");
+  });
+});
+
+// ====== 字数 ======
+const contentInput = document.getElementById("contentInput");
+function updateCharCount() { document.getElementById("charCount").textContent = contentInput.value.length + " 字"; }
+contentInput.addEventListener("input", updateCharCount);
+
+// ====== 数量 ======
+let selectedCount = 5;
+document.querySelectorAll(".count-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".count-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    selectedCount = parseInt(btn.dataset.count);
+  });
+});
+
+// ====== API 折叠 ======
+document.getElementById("apiToggle").addEventListener("click", () => {
+  const cfg = document.getElementById("apiConfig");
+  const toggle = document.getElementById("apiToggle");
+  cfg.classList.toggle("show");
+  toggle.innerHTML = cfg.classList.contains("show") ? "⚙️ API 配置 ▾" : "⚙️ API 配置（可选） ▸";
+});
+
+// ====== 生成 ======
+document.getElementById("generateBtn").addEventListener("click", async () => {
+  const content = contentInput.value.trim();
+  if (!content) { alert(currentMode === "copy" ? "请粘贴文案内容" : "请输入视频传播方向"); return; }
+  saveApiConfig();
+
+  const btn = document.getElementById("generateBtn");
+  const loading = document.getElementById("loading");
+  const results = document.getElementById("results");
+  btn.disabled = true; btn.textContent = "生成中...";
+  loading.classList.add("show"); results.classList.remove("show");
+
+  try {
+    const resp = await fetch("/generate", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        mode: currentMode,
+        content: content,
+        product: currentProduct,
+        copy_type: currentType,
+        count: selectedCount,
+        api_key: document.getElementById("apiKey").value.trim(),
+        base_url: document.getElementById("baseUrl").value.trim(),
+        model: document.getElementById("model").value.trim(),
+      }),
+    });
+    const data = await resp.json();
+    if (!data.success) { alert("生成失败：" + (data.error || "未知错误")); return; }
+
+    const sourceLabel = data.source === "api" ? "AI 生成" : "模板生成";
+    const sourceColor = data.source === "api" ? "#4caf50" : "#888";
+    let html = '<div style="text-align:right;font-size:12px;color:' + sourceColor + ';margin-bottom:8px;">' + sourceLabel + '</div>';
+    data.titles.forEach((t, i) => {
+      const badge = t.valid
+        ? '<span class="result-badge badge-ok">合规</span>'
+        : '<span class="result-badge badge-warn" title="' + t.issues.join(", ") + '">' + t.issues[0] + '</span>';
+      html += '<div class="result-item"><div class="result-num">' + (i+1) + '</div>'
+        + '<div class="result-title">' + escapeHtml(t.title) + '</div>'
+        + badge
+        + '<button class="result-copy" onclick="copyTitle(this,\'' + escapeHtml(t.title) + '\')">复制</button></div>';
+    });
+    results.innerHTML = html;
+    results.classList.add("show");
+  } catch (err) {
+    alert("请求失败：" + err.message);
+  } finally {
+    loading.classList.remove("show");
+    btn.disabled = false; btn.textContent = "生成标题";
+  }
+});
+
+function copyTitle(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = "已复制"; btn.classList.add("copied");
+    setTimeout(() => { btn.textContent = "复制"; btn.classList.remove("copied"); }, 1500);
+  });
+}
+function escapeHtml(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+</script>
+</body>
+</html>
