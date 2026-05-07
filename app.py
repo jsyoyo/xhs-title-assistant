@@ -147,7 +147,8 @@ def debug():
 FEISHU_APP_ID = os.getenv("FEISHU_APP_ID", "")
 FEISHU_APP_SECRET = os.getenv("FEISHU_APP_SECRET", "")
 FEISHU_TOKEN = {"value": "", "expires_at": 0}
-_PROCESSED_EVENTS = {}  # event_id -> timestamp，防止重复推送（dict 保证插入顺序）
+BOT_NAMES = ("标题助手", "xhs")  # 用于从 mentions 中识别本机器人
+_PROCESSED_EVENTS = {}  # event_id -> True，防止重复推送（dict 保证插入顺序）
 _BOT_OPEN_ID = None  # 机器人在飞书的 open_id，首次收到@消息时自动学习
 
 
@@ -303,6 +304,8 @@ def _process_feishu_message(message_id, user_text):
 
 @app.route("/feishu/event", methods=["POST"])
 def feishu_event():
+    global _BOT_OPEN_ID
+
     body = request.get_json()
     if not body:
         return jsonify({}), 400
@@ -324,7 +327,7 @@ def feishu_event():
         logger.info(f"飞书重复事件，跳过: {event_id}")
         return jsonify({})
     if event_id:
-        _PROCESSED_EVENTS[event_id] = time.time()
+        _PROCESSED_EVENTS[event_id] = True
         # 超过 200 条时淘汰最旧的一条，而不是全清空
         while len(_PROCESSED_EVENTS) > 200:
             oldest = next(iter(_PROCESSED_EVENTS))
@@ -337,7 +340,6 @@ def feishu_event():
         sender_open_id = sender.get("sender_id", {}).get("open_id", "")
 
         # P2：忽略机器人自己的消息，防止自循环
-        global _BOT_OPEN_ID
         if _BOT_OPEN_ID and sender_open_id == _BOT_OPEN_ID:
             logger.info(f"飞书消息（自己发的），跳过")
             return jsonify({})
@@ -357,7 +359,7 @@ def feishu_event():
                 if _BOT_OPEN_ID and mid == _BOT_OPEN_ID:
                     bot_mentioned = True
                     break
-                if not _BOT_OPEN_ID and ("标题助手" in name or "xhs" in name.lower()):
+                if not _BOT_OPEN_ID and any(bn.lower() in name.lower() for bn in BOT_NAMES):
                     bot_mentioned = True
                     _BOT_OPEN_ID = mid
                     logger.info(f"已学习机器人 open_id: {_BOT_OPEN_ID}")

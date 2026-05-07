@@ -419,7 +419,7 @@ def generate_titles(mode, content, product_id="bzu", copy_type="long", count=5,
                 line = line.strip()
                 line = re.sub(r'^[\d]+[\.\、\s]+', '', line)
                 line = re.sub(r'^标题[\d]*[：:]', '', line)
-                line = line.strip().strip('"').strip('"').strip('"')
+                line = line.strip().strip('"')
                 if line and len(line) >= 2:
                     raw_titles.append(line)
 

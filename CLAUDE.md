@@ -59,13 +59,13 @@ LLM 无 API Key 时自动回退到内置模板（`FALLBACK_*` 字典）。
 
 ### 关键函数说明
 
-| 函数 | 文件:行 | 用途 |
+| 函数 | 文件 | 用途 |
 |---|---|---|
-| `generate_titles()` | title_generator.py:352 | 主入口，调用 LLM 或模板 |
-| `check_title()` | title_generator.py:122 | 合规检查（违禁词、功效承诺、长度） |
-| `_parse_command()` | app.py:288 | 从飞书消息解析参数 |
-| `feishu_event()` | app.py:403 | 飞书事件入口 |
-| `_process_feishu_message()` | app.py:346 | 异步标题生成+回复 |
+| `generate_titles()` | title_generator.py | 主入口，调用 LLM 或模板 |
+| `check_title()` | title_generator.py | 合规检查（违禁词、功效承诺、长度） |
+| `_parse_command()` | app.py | 从飞书消息解析参数 |
+| `feishu_event()` | app.py | 飞书事件入口 |
+| `_process_feishu_message()` | app.py | 异步标题生成+回复 |
 
 ## 部署
 
