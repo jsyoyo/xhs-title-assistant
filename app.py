@@ -2,7 +2,6 @@
 小红书爆款标题助手 - Flask Web 应用
 模式1：粘贴文案 → 提炼标题
 模式2：输入视频方向 → 生成标题
-附加：知识库编辑器（/editor）
 """
 
 import os
@@ -23,7 +22,6 @@ import requests
 from title_generator import generate_titles, get_product_list, get_kb_dir
 
 app = Flask(__name__)
-BASE_DIR = Path(__file__).parent
 
 # 日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")

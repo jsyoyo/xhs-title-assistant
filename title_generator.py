@@ -172,18 +172,6 @@ FALLBACK_CTJ_LONG = {  # 10-20字符
 }
 
 
-def _detect_perspective(text):
-    """检测文案的人称视角"""
-    first_count = len(re.findall(r'我', text))
-    second_count = len(re.findall(r'你|姐妹', text))
-    if first_count > second_count * 2 and first_count > 5:
-        return "第一人称"
-    elif second_count > first_count * 2 and second_count > 5:
-        return "第二人称"
-    else:
-        return "第三人称/科普"
-
-
 def _fallback_titles(product_id, input_text, count, copy_type="long"):
     """模板匹配回退，按产品+角度匹配，加输入内容哈希偏移避免不同文案输出雷同"""
     if product_id == "bzu":
