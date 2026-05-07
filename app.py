@@ -246,7 +246,8 @@ def editor_api_save():
 FEISHU_APP_ID = os.getenv("FEISHU_APP_ID", "")
 FEISHU_APP_SECRET = os.getenv("FEISHU_APP_SECRET", "")
 FEISHU_TOKEN = {"value": "", "expires_at": 0}
-_PROCESSED_EVENTS = set()  # 已处理的事件 ID，防止重复推送
+_PROCESSED_EVENTS = {}  # event_id -> timestamp，防止重复推送（dict 保证插入顺序）
+_BOT_OPEN_ID = None  # 机器人在飞书的 open_id，首次收到@消息时自动学习
 
 
 def _get_tenant_token():
@@ -422,13 +423,48 @@ def feishu_event():
         logger.info(f"飞书重复事件，跳过: {event_id}")
         return jsonify({})
     if event_id:
-        _PROCESSED_EVENTS.add(event_id)
-        # 防止 set 无限增长，保留最近 200 条
-        if len(_PROCESSED_EVENTS) > 200:
-            _PROCESSED_EVENTS.clear()
+        _PROCESSED_EVENTS[event_id] = time.time()
+        # 超过 200 条时淘汰最旧的一条，而不是全清空
+        while len(_PROCESSED_EVENTS) > 200:
+            oldest = next(iter(_PROCESSED_EVENTS))
+            del _PROCESSED_EVENTS[oldest]
 
     if event_type == "im.message.receive_v1" and message.get("message_type") == "text":
         message_id = message.get("message_id", "")
+        chat_type = message.get("chat_type", "group")
+        sender = event.get("sender", {})
+        sender_open_id = sender.get("sender_id", {}).get("open_id", "")
+
+        # P2：忽略机器人自己的消息，防止自循环
+        global _BOT_OPEN_ID
+        if _BOT_OPEN_ID and sender_open_id == _BOT_OPEN_ID:
+            logger.info(f"飞书消息（自己发的），跳过")
+            return jsonify({})
+
+        # P0：群聊中只处理 @机器人 的消息；私聊（p2p）全部处理
+        if chat_type != "p2p":
+            mentions = message.get("mentions", [])
+            if not mentions:
+                logger.info(f"群聊消息未@任何人，跳过")
+                return jsonify({})
+            # 检查被@的人里有没有本机器人
+            bot_mentioned = False
+            for m in mentions:
+                mid = m.get("id", {}).get("open_id", "")
+                name = m.get("name", "")
+                # 已知 open_id 时精确匹配，否则靠名字识别
+                if _BOT_OPEN_ID and mid == _BOT_OPEN_ID:
+                    bot_mentioned = True
+                    break
+                if not _BOT_OPEN_ID and ("标题助手" in name or "xhs" in name.lower()):
+                    bot_mentioned = True
+                    _BOT_OPEN_ID = mid
+                    logger.info(f"已学习机器人 open_id: {_BOT_OPEN_ID}")
+                    break
+            if not bot_mentioned:
+                logger.info(f"群聊消息@了别人而非机器人，跳过")
+                return jsonify({})
+
         content_str = message.get("content", "{}")
         try:
             content_json = json.loads(content_str)
