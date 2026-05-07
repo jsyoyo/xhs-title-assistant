@@ -12,7 +12,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
-from flask import Flask, render_template, request, jsonify, session, redirect
+from flask import Flask, render_template, request, jsonify
 
 import json
 import re
@@ -24,12 +24,6 @@ from title_generator import generate_titles, get_product_list, get_kb_dir
 
 app = Flask(__name__)
 BASE_DIR = Path(__file__).parent
-
-# Flask session 密钥（用于编辑器登录态）
-app.secret_key = os.getenv("SECRET_KEY", os.urandom(24).hex())
-
-# 编辑器访问密码
-EDITOR_PASSWORD = os.getenv("EDITOR_PASSWORD", "")
 
 # 日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -143,100 +137,7 @@ def debug():
         "api_key_configured": bool(os.getenv("LLM_API_KEY")),
         "api_base_url": os.getenv("LLM_BASE_URL", "https://api.deepseek.com"),
         "api_model": os.getenv("LLM_MODEL", "deepseek-chat"),
-        "editor_configured": bool(EDITOR_PASSWORD),
     })
-
-
-# ============================================================
-# 知识库编辑器
-# ============================================================
-
-def _editor_check_auth():
-    """检查编辑器访问权限，返回 True/False"""
-    if not EDITOR_PASSWORD:
-        return False
-    return session.get("editor_authenticated") == True
-
-
-@app.route("/editor")
-def editor():
-    return render_template("editor.html")
-
-
-@app.route("/editor/login", methods=["POST"])
-def editor_login():
-    if not EDITOR_PASSWORD:
-        return jsonify({"success": False, "error": "编辑器未配置，请在 .env 中设置 EDITOR_PASSWORD"}), 403
-
-    data = request.get_json()
-    pwd = data.get("password", "") if data else ""
-    if pwd == EDITOR_PASSWORD:
-        session["editor_authenticated"] = True
-        logger.info("编辑器登录成功")
-        return jsonify({"success": True})
-    logger.warning("编辑器登录失败：密码错误")
-    return jsonify({"success": False, "error": "密码错误"}), 401
-
-
-@app.route("/editor/logout", methods=["POST"])
-def editor_logout():
-    session.pop("editor_authenticated", None)
-    return jsonify({"success": True})
-
-
-@app.route("/editor/api/products")
-def editor_api_products():
-    if not _editor_check_auth():
-        return jsonify({"success": False, "error": "请先登录"}), 401
-    products = get_product_list()
-    return jsonify({"success": True, "products": products})
-
-
-@app.route("/editor/api/load")
-def editor_api_load():
-    if not _editor_check_auth():
-        return jsonify({"success": False, "error": "请先登录"}), 401
-
-    product_id = request.args.get("product", "")
-    products = {p["id"]: p for p in get_product_list()}
-    if product_id not in products:
-        return jsonify({"success": False, "error": "无效产品ID"}), 400
-
-    kb_dir = Path(get_kb_dir())
-    filepath = kb_dir / products[product_id]["file"]
-    if filepath.exists():
-        content = filepath.read_text(encoding="utf-8")
-    else:
-        content = ""
-    return jsonify({"success": True, "content": content, "product": products[product_id]})
-
-
-@app.route("/editor/api/save", methods=["POST"])
-def editor_api_save():
-    if not _editor_check_auth():
-        return jsonify({"success": False, "error": "请先登录"}), 401
-
-    data = request.get_json()
-    if not data:
-        return jsonify({"success": False, "error": "无效请求"}), 400
-
-    product_id = data.get("product", "")
-    content = data.get("content", "")
-
-    products = {p["id"]: p for p in get_product_list()}
-    if product_id not in products:
-        return jsonify({"success": False, "error": "无效产品ID"}), 400
-
-    kb_dir = Path(get_kb_dir())
-    filepath = kb_dir / products[product_id]["file"]
-
-    try:
-        filepath.write_text(content, encoding="utf-8")
-        logger.info(f"知识库已更新: {products[product_id]['name']} ({filepath})")
-        return jsonify({"success": True, "message": f"「{products[product_id]['name']}」知识库已保存"})
-    except Exception as e:
-        logger.error(f"知识库保存失败: {e}")
-        return jsonify({"success": False, "error": f"保存失败：{str(e)}"}), 500
 
 
 # ============================================================
