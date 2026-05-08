@@ -18,13 +18,13 @@ body{
 /* 产品选择 */
 .product-row,.type-row{display:flex;align-items:center;gap:8px;margin-bottom:16px;}
 .product-row span,.type-row span{font-size:14px;color:#888;white-space:nowrap;}
-.product-btn,.type-btn{
+.product-btn,.format-btn,.ctype-btn{
   flex:1;padding:10px 0;text-align:center;cursor:pointer;
   border-radius:8px;border:1px solid #2a2d38;background:#1a1d28;color:#888;font-size:14px;font-weight:600;
   transition:all .2s;outline:none;
 }
-.product-btn.active,.type-btn.active{background:#2a2d38;border-color:#ffa726;color:#ffa726;}
-.product-btn:hover,.type-btn:hover{border-color:#555;}
+.product-btn.active,.format-btn.active,.ctype-btn.active{background:#2a2d38;border-color:#ffa726;color:#ffa726;}
+.product-btn:hover,.format-btn:hover,.ctype-btn:hover{border-color:#555;}
 
 /* 模式 Tab */
 .tabs{display:flex;margin-bottom:20px;border-radius:12px;overflow:hidden;border:1px solid #2a2d38;}
@@ -101,11 +101,18 @@ body{
     <button class="product-btn" data-product="ctj">巢天娇</button>
   </div>
 
+  <!-- 内容类型 -->
+  <div class="type-row">
+    <span>类型：</span>
+    <button class="ctype-btn active" data-ctype="ugc">UGC · 真实分享风</button>
+    <button class="ctype-btn" data-ctype="ad">广告 · 直接推广风</button>
+  </div>
+
   <!-- 格式选择 -->
   <div class="type-row">
     <span>格式：</span>
-    <button class="type-btn" data-type="short">短标题（12字符内）</button>
-    <button class="type-btn active" data-type="long">长标题（10-20字）</button>
+    <button class="format-btn" data-type="short">短标题（12字符内）</button>
+    <button class="format-btn active" data-type="long">长标题（10-20字）</button>
   </div>
 
   <!-- Tab -->
@@ -163,6 +170,7 @@ body{
 let currentMode = "copy";
 let currentProduct = "bzu";
 let currentType = "long";
+let currentContentType = "ugc";
 
 // ====== localStorage API 配置 ======
 const LS_KEYS = { apiKey: 'ttl_api_key', baseUrl: 'ttl_base_url', model: 'ttl_model' };
@@ -198,11 +206,33 @@ document.querySelectorAll(".product-btn").forEach(btn => {
 });
 
 // ====== 格式选择 ======
-document.querySelectorAll(".type-btn").forEach(btn => {
+document.querySelectorAll(".format-btn").forEach(btn => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".type-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".format-btn").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     currentType = btn.dataset.type;
+  });
+});
+
+// ====== 内容类型选择 ======
+document.querySelectorAll(".ctype-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".ctype-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentContentType = btn.dataset.ctype;
+    const ta = document.getElementById("contentInput");
+    if (currentContentType === "ugc") {
+      ta.placeholder = "在此粘贴小红书文案全文（如：个人体验分享、干货合集、好物测评...）";
+    } else {
+      ta.placeholder = "在此粘贴广告推广文案（如：产品卖点介绍、促销活动、种草推文...）";
+    }
+    // 联动：UGC 默认长标题，广告默认短标题
+    const targetType = currentContentType === "ugc" ? "long" : "short";
+    document.querySelectorAll(".format-btn").forEach(b => {
+      b.classList.toggle("active", b.dataset.type === targetType);
+    });
+    currentType = targetType;
+    document.getElementById("results").classList.remove("show");
   });
 });
 
@@ -271,6 +301,7 @@ document.getElementById("generateBtn").addEventListener("click", async () => {
         mode: currentMode,
         content: content,
         product: currentProduct,
+        content_type: currentContentType,
         copy_type: currentType,
         count: selectedCount,
         api_key: document.getElementById("apiKey").value.trim(),

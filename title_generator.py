@@ -99,8 +99,9 @@ def _fallback_context(product_id):
 # 合规检查
 # ============================================================
 
+# 子串匹配容易误判的词改用正则，其余保留简单匹配
 FORBIDDEN_WORDS = [
-    "最", "第一", "唯一", "绝对", "100%", "百分之百", "保证",
+    "唯一", "绝对", "100%", "百分之百", "保证",
     "顶级", "极品", "万能", "零风险", "永不", "最佳", "最好",
     "治疗", "治愈", "根治", "药到病除", "处方", "临床验证",
     "诊断", "疗效", "用药", "患者", "病理",
@@ -110,6 +111,12 @@ FORBIDDEN_WORDS = [
     "替代药物", "替代药品", "比药还好", "不用吃药",
     "糖尿病", "高血压", "心脏病", "癌症", "肿瘤",
     "限时", "抢购", "赶紧下单", "手慢无", "错过后悔",
+]
+
+# 需要语境判断的违禁词正则：匹配极限用法，排除非极限用法
+FORBIDDEN_PATTERNS = [
+    (r"最(?!(后|近|初|终|少|多|早|晚|新|老|先|长|短|大|小|低|高|内|外|前|后|近|远))", "最（极限词）"),
+    (r"第一(?!(步|次|时间|人|期|天|年|件))", "第一（极限词）"),
 ]
 
 EFFECT_PATTERNS = [
@@ -125,6 +132,9 @@ def check_title(title, max_len=30):
     for word in FORBIDDEN_WORDS:
         if word in title:
             issues.append(f"违禁词「{word}」")
+    for pattern, label in FORBIDDEN_PATTERNS:
+        if re.search(pattern, title):
+            issues.append(f"违禁词「{label}」")
     for pattern in EFFECT_PATTERNS:
         if re.search(pattern, title):
             issues.append("疑似功效承诺")
@@ -254,11 +264,24 @@ def _load_aux_knowledge():
 
 _AUX_KNOWLEDGE = _load_aux_knowledge()
 
+
+def _load_title_examples(content_type):
+    """加载指定类型的标题范例文件，失败时返回空字符串"""
+    filename = f"title-examples-{content_type}.md"
+    filepath = Path(get_kb_dir()) / filename
+    if not filepath.exists():
+        return ""
+    try:
+        return filepath.read_text(encoding="utf-8")[:2000]
+    except Exception:
+        return ""
+
+
 # ============================================================
 # 提示词
 # ============================================================
 
-_MODE1_BASE = """你是小红书标题创作者。你的工作很简单：读一段文案，凭直觉写出让人想点进去的标题。
+_MODE1_UGC = """你是小红书标题创作者。读一段 UGC 文案（用户真实分享），凭直觉写出让人想点进去的标题。
 
 **创作方法：**
 读完文案，问自己：这段文案里最打动人的那个瞬间是什么？把这个感觉直接变成标题。
@@ -271,20 +294,37 @@ _MODE1_BASE = """你是小红书标题创作者。你的工作很简单：读一
 **硬性规则：**
 - 不使用 emoji
 - 禁止极限词（最、第一、100%）、医疗术语（治疗、疗效）、功效承诺（保证有效）
+- 产品名自然融入，不是每一条都必须出现
 
-**标题风格参考 — 看真人怎么写：**
-情感共鸣：半年内调心得 → "听完播客发现，我这半年的内调思路没走弯路"
-痛点方案：30+抗衰食物科普 → "女人过30，要想老得慢！这些食物要多吃！"
-反转认知：骨皮同养食补清单 → "想比同龄人显年轻？记住这22种食物"
-真实体验：两个月产品体验 → "连续吃了两个月研生之力巢天娇的真实感受"
-干货合集：结构化内调方案 → "建议先存后看！全网很全的养雌内调方案"
+**标题风格参考 — 真人 UGC 范例：**
+{examples}
 
 {aux}
 
 **输出格式**
 每行一个标题，直接输出标题文字，不要编号、不要引号、不要任何前缀："""
 
-MODE1_SYSTEM = _MODE1_BASE.replace("{aux}", _AUX_KNOWLEDGE)
+_MODE1_AD = """你是小红书标题创作者。读一段产品推广文案（广告素材），写出吸引点击、促进转化的标题。
+
+**创作方法：**
+- 从文案中提取最核心的卖点或痛点，直接做进标题
+- 标题要"直给"——读者扫一眼就知道这条内容讲什么、对她有什么用
+- 用结果说话：具体数字、效果对比、场景化描述
+- 制造紧迫感或好奇心：限时、限量、反常识、揭秘
+- 产品名可以明确露出，这是广告素材，不需要隐藏
+
+**硬性规则：**
+- 不使用 emoji
+- 禁止极限词（最、第一、100%）、医疗术语（治疗、疗效）、功效承诺（保证有效）
+- 可以正面描述产品功能，但不说"保证""一定"
+
+**标题风格参考 — 广告素材范例：**
+{examples}
+
+{aux}
+
+**输出格式**
+每行一个标题，直接输出标题文字，不要编号、不要引号、不要任何前缀："""
 
 MODE1_USER = """## 产品背景
 {product}
@@ -295,31 +335,48 @@ MODE1_USER = """## 产品背景
 ## 要求
 基于以上文案，生成 {count} 个{type_desc}。"""
 
-MODE2_SYSTEM = """你是小红书标题创作专家。
+_MODE2_UGC = """你是小红书标题创作专家，为 UGC 风格视频配标题。
 
 **创作规则**
 1. 不使用 emoji
 2. 使用逗号、问号等标点做自然断句，有呼吸感和节奏感
 3. 口语化、原生感强，像真实用户分享而非广告——多用"我"开头、带情绪、有悬念
 4. 有强烈的点击欲望，戳痛点、造悬念、给共鸣
-5. 标题必须与产品相关，自然植入产品关联
+5. 产品名自然融入，不是每一条都必须出现
 6. 禁止极限词、医疗术语、功效承诺、专家背书
+7. 直接用用户能懂的词（如"更年期""卵巢"），不用"花期""花园"等隐晦说法让用户猜
+8. 不夸大效果（如"调回少女状态""回到20岁"），描述要真实可及
 
 **标题创作要诀 — 写出"人味"：**
 1. 用具体数字制造真实感：两个月、22种、30岁、5个习惯
 2. 用情感钩子替代空洞形容词：感谢、后悔、误解、没白花、再舒服也别做
 3. 口语节奏：短的像聊天，长的有呼吸感，善用逗号断句
-4. 五种爆款风格及真人范例：
-   情感共鸣：第一人称分享半年内调心得 → "听完播客发现，我这半年的内调思路没走弯路"
-   痛点方案：女生30+抗衰食物科普 → "女人过30，要想老得慢！这些食物要多吃！"
-   反转认知：骨皮同养概念+食补清单 → "想比同龄人显年轻？记住这22种食物"
-   真实体验：两个月巢天娇素人体验 → "连续吃了两个月研生之力巢天娇的真实感受"
-   干货合集：结构化养雌内调方案 → "建议先存后看！全网很全的养雌内调方案"
+
+{examples}
 
 {aux}
 
 **输出格式**
-每行一个标题，直接输出标题文字，不要编号、不要引号、不要任何前缀：""".replace("{aux}", _AUX_KNOWLEDGE)
+每行一个标题，直接输出标题文字，不要编号、不要引号、不要任何前缀："""
+
+_MODE2_AD = """你是小红书标题创作专家，为广告素材视频配标题。
+
+**创作规则**
+1. 不使用 emoji
+2. 标题要"直给"——读者扫一眼就知道这条内容讲什么、对她有什么用
+3. 用结果说话：具体数字、效果对比、场景化描述
+4. 制造紧迫感或好奇心：限时、限量、反常识、揭秘
+5. 产品名可以明确露出，这是广告素材，不需要隐藏
+6. 禁止极限词、医疗术语、功效承诺、专家背书
+7. 直接用用户能懂的词（如"更年期""卵巢"），不用"花期""花园"等隐晦说法让用户猜
+8. 不夸大效果（如"调回少女状态""回到20岁"），描述要真实可及
+
+{examples}
+
+{aux}
+
+**输出格式**
+每行一个标题，直接输出标题文字，不要编号、不要引号、不要任何前缀："""
 
 MODE2_USER = """## 产品背景
 {product}
@@ -336,6 +393,7 @@ MODE2_USER = """## 产品背景
 # ============================================================
 
 def generate_titles(mode, content, product_id="bzu", copy_type="long", count=5,
+                    content_type="ugc",
                     api_key=None, base_url=None, model=None):
     """
     生成标题
@@ -346,6 +404,7 @@ def generate_titles(mode, content, product_id="bzu", copy_type="long", count=5,
         product_id: 产品 ID（来自 products.json）
         copy_type: "short"（≤10字）或 "long"（10-20字）
         count: 生成数量
+        content_type: "ugc"（真实分享风）或 "ad"（直接推广风）
         api_key / base_url / model: LLM 配置（可选，不传则读环境变量）
 
     Returns:
@@ -355,6 +414,9 @@ def generate_titles(mode, content, product_id="bzu", copy_type="long", count=5,
     valid_ids = list(_get_product_names().keys())
     if product_id not in valid_ids:
         product_id = valid_ids[0] if valid_ids else "bzu"
+
+    if content_type not in ("ugc", "ad"):
+        content_type = "ugc"
 
     api_key = api_key or os.getenv("LLM_API_KEY", "")
     base_url = base_url or os.getenv("LLM_BASE_URL", "https://api.deepseek.com")
@@ -371,8 +433,10 @@ def generate_titles(mode, content, product_id="bzu", copy_type="long", count=5,
         try:
             client = OpenAI(api_key=api_key, base_url=base_url)
 
+            examples = _load_title_examples(content_type)
             if mode == "copy":
-                system_prompt = MODE1_SYSTEM
+                base_prompt = _MODE1_UGC if content_type == "ugc" else _MODE1_AD
+                system_prompt = base_prompt.replace("{examples}", examples).replace("{aux}", _AUX_KNOWLEDGE)
                 user_prompt = MODE1_USER.format(
                     product=product_context,
                     content=content[:3000],
@@ -380,7 +444,8 @@ def generate_titles(mode, content, product_id="bzu", copy_type="long", count=5,
                     type_desc=type_desc,
                 )
             else:
-                system_prompt = MODE2_SYSTEM
+                base_prompt = _MODE2_UGC if content_type == "ugc" else _MODE2_AD
+                system_prompt = base_prompt.replace("{examples}", examples).replace("{aux}", _AUX_KNOWLEDGE)
                 user_prompt = MODE2_USER.format(
                     product=product_context,
                     angle=content,

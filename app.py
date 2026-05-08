@@ -46,6 +46,7 @@ def generate():
     mode = data.get("mode", "copy")
     content = data.get("content", "").strip()
     product = data.get("product", "bzu")
+    content_type = data.get("content_type", "ugc").strip()
     copy_type = data.get("copy_type", "long")
     count = int(data.get("count", 5))
 
@@ -59,6 +60,9 @@ def generate():
     valid_ids = [p["id"] for p in get_product_list()]
     if product not in valid_ids:
         product = valid_ids[0] if valid_ids else "bzu"
+
+    if content_type not in ("ugc", "ad"):
+        content_type = "ugc"
 
     if copy_type not in ("short", "long"):
         copy_type = "long"
@@ -78,6 +82,7 @@ def generate():
             product_id=product,
             copy_type=copy_type,
             count=count,
+            content_type=content_type,
             api_key=api_key or None,
             base_url=base_url or None,
             model=model or None,
@@ -196,6 +201,7 @@ def _parse_command(text):
     text = text.strip()
 
     product = "bzu"
+    content_type = "ugc"
     copy_type = "long"
     count = 5
     mode = "copy"
@@ -219,6 +225,17 @@ def _parse_command(text):
     # 去掉前导标点（用户可能在产品名后输入逗号、句号等）
     text = re.sub(r'^[\s，,。、]+', '', text)
 
+    # 尝试匹配内容类型
+    for kw, val in [("ad", "ad"), ("广告", "ad"), ("素材", "ad"),
+                    ("ugc", "ugc"), ("分享", "ugc")]:
+        if text.startswith(kw):
+            content_type = val
+            text = text[len(kw):].strip()
+            break
+
+    # 去掉前导标点
+    text = re.sub(r'^[\s，,。、]+', '', text)
+
     # 尝试匹配格式
     for fmt, val in [("short", "short"), ("短标题", "short"), ("短", "short"), ("long", "long"), ("长标题", "long"), ("长", "long")]:
         if text.startswith(fmt):
@@ -240,7 +257,7 @@ def _parse_command(text):
     # 剩余部分为内容，去掉前导标点
     content = re.sub(r'^[\s，,。、]+', '', text).strip()
 
-    return product, copy_type, count, content
+    return product, content_type, copy_type, count, content
 
 
 def _process_feishu_message(message_id, user_text):
@@ -250,16 +267,17 @@ def _process_feishu_message(message_id, user_text):
             _reply_feishu(message_id, "请发送文案内容，例如：\n超能B族 长 5 我吃了三个月B族，皮肤出油改善了...")
             return
 
-        product, copy_type, count, content = _parse_command(user_text)
+        product, content_type, copy_type, count, content = _parse_command(user_text)
 
         if not content:
             help_text = (
                 "请按格式发送：\n"
-                "【产品】 【短/长】 【数量】 文案内容\n\n"
+                "【产品】 【UGC/广告】 【短/长】 【数量】 文案内容\n\n"
                 "产品可选：超能B族 / 巢天娇\n"
+                "类型可选：UGC / 广告\n"
                 "格式可选：短 / 长\n"
                 "数量可选：3 / 5 / 8 / 10\n\n"
-                "示例：超能B族 长 5 我吃了三个月B族，皮肤出油真的改善了"
+                "示例：超能B族 UGC 长 5 我吃了三个月B族，皮肤出油真的改善了"
             )
             _reply_feishu(message_id, help_text)
             return
@@ -270,14 +288,16 @@ def _process_feishu_message(message_id, user_text):
             product_id=product,
             copy_type=copy_type,
             count=count,
+            content_type=content_type,
         )
 
         product_names = {p["id"]: p["name"] for p in get_product_list()}
+        ctype_label = "UGC" if content_type == "ugc" else "广告"
         type_label = "短标题" if copy_type == "short" else "长标题"
         source_label = "AI生成" if source == "api" else "模板生成"
 
         lines = [
-            f"【{product_names[product]} · {type_label} · {source_label}】",
+            f"【{product_names[product]} · {ctype_label} · {type_label} · {source_label}】",
             "",
         ]
         for i, (title, valid, _issues) in enumerate(results, 1):
